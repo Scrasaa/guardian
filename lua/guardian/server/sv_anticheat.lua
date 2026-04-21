@@ -78,7 +78,7 @@ local CPP_AIMBOT_BLACKLIST =
     ["weapon_physcannon"] = true,
 }
 
-local CPP_AIMBOT_THRESHOLD  = 15   -- consecutive qualifying ticks before flag
+local CPP_AIMBOT_THRESHOLD  = 20   -- consecutive qualifying ticks before flag
 local CPP_AIMBOT_GRACE_SEC  = 25   -- seconds post-join before checks begin
 local CPP_PACKET_LOSS_MAX   = 80   -- % packet loss above which checks are skipped
 
@@ -131,7 +131,6 @@ hook.Add("StartCommand", "Guardian.AntiCheat.CppAimbot", function(ply, cmd)
             if IsValid(tr.Entity) and (tr.Entity:IsPlayer() or tr.Entity:IsBot()) and tr.Entity:Alive() then
                 ply.guardian_cpp_detections = ply.guardian_cpp_detections + 1
 
-                print(ply.guardian_cpp_detections)
                 if ply.guardian_cpp_detections >= CPP_AIMBOT_THRESHOLD then
                     ply.guardian_aimbot_flagged = true
                     Guardian.FlagPlayer(ply,
