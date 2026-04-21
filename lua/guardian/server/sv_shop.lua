@@ -158,7 +158,7 @@ end
 --  so each weapon carries an independent skin simultaneously.
 --  Every other category keeps its plain id as the slot key.
 -- ============================================================
-local function equip_key(item)
+function equip_key(item)
     if item.category == "skins" and item.data and item.data.weapon then
         return "skins:" .. item.data.weapon
     end
