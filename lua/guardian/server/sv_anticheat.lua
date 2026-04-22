@@ -1,10 +1,8 @@
 -- =============================================================================
--- Guardian — Anti-Cheat
+-- Guardian — Anti-Cheat  [SERVER]
 -- Detections:
 --   1a. Aimbot / CPP zero-mouse on-target trace analysis
---       (replaces statistical angle analysis; silent aim stays via 1b)
 --   1b. Aimbot / input-contradiction analysis
---       (silent aim, slow tracking, mouse direction contradiction)
 --   2.  Bullet accuracy
 --   3.  Bhop
 --   4.  Noclip attempt
@@ -15,29 +13,29 @@
 --   9.  Engine prediction  (client-side, server-verified)
 --   10. Suspicious keybind detection
 --   11. Source crasher / ExecuteStringCommand exploit  (Linux)
---   12. Anti-screengrab evasion detection
+--   12. Anti-screengrab evasion detection  (client-side, server-verified)
 --   13. No-recoil / viewpunch suppression  (client-side, server-verified)
 --   14. Anti-spread / bullet spread removal
---   15. Alt account / ban evasion detection
+--   15. Alt account / ban evasion detection  (client-side, server-verified)
+--
+-- Client-side halves live in cl_anticheat.lua.
 -- =============================================================================
 
 Guardian = Guardian or {}
 
 -- =============================================================================
--- Shared initialisation — network strings + feature toggles
+-- Initialisation — network strings + feature toggles
 -- =============================================================================
 
-if SERVER then
-    Guardian.Print("Guardian anti-cheat system loaded.")
+Guardian.Print("Guardian anti-cheat system loaded.")
 
-    util.AddNetworkString("Guardian.Net.EngPredFlag")
-    util.AddNetworkString("Guardian.Net.NoRecoilFlag")
-    util.AddNetworkString("Guardian.Net.AntiScreenGrab.Check")
-    util.AddNetworkString("Guardian.Net.AntiScreenGrab.Report")
-    util.AddNetworkString("Guardian.Net.AltCheck")
-    util.AddNetworkString("Guardian.Net.AltCheckResponse")
-    util.AddNetworkString("Guardian.Net.AltCheckCount")
-end
+util.AddNetworkString("Guardian.Net.EngPredFlag")
+util.AddNetworkString("Guardian.Net.NoRecoilFlag")
+util.AddNetworkString("Guardian.Net.AntiScreenGrab.Check")
+util.AddNetworkString("Guardian.Net.AntiScreenGrab.Report")
+util.AddNetworkString("Guardian.Net.AltCheck")
+util.AddNetworkString("Guardian.Net.AltCheckResponse")
+util.AddNetworkString("Guardian.Net.AltCheckCount")
 
 -- Feature toggles — override in your server config before Guardian loads.
 Guardian.Config = Guardian.Config or
@@ -54,7 +52,7 @@ Guardian.Config = Guardian.Config or
 }
 
 -- =============================================================================
--- [1a] Aimbot — CPP Zero-Mouse On-Target Trace  (replaces statistical 1a)
+-- [1a] Aimbot — CPP Zero-Mouse On-Target Trace
 -- =============================================================================
 -- Detects external C++/external-process aimbots that write eye angles directly
 -- without generating mouse input.  Each tick where:
@@ -69,8 +67,6 @@ Guardian.Config = Guardian.Config or
 -- Blacklisted tools cannot aim at players; counter is zeroed for them.
 -- =============================================================================
 
-if SERVER then
-
 local CPP_AIMBOT_BLACKLIST =
 {
     ["weapon_physgun"]    = true,
@@ -78,9 +74,8 @@ local CPP_AIMBOT_BLACKLIST =
     ["weapon_physcannon"] = true,
 }
 
-local CPP_AIMBOT_THRESHOLD  = 20   -- consecutive qualifying ticks before flag
-local CPP_AIMBOT_GRACE_SEC  = 25   -- seconds post-join before checks begin
-local CPP_PACKET_LOSS_MAX   = 80   -- % packet loss above which checks are skipped
+local CPP_AIMBOT_THRESHOLD = 20   -- consecutive qualifying ticks before flag
+local CPP_PACKET_LOSS_MAX  = 80   -- % packet loss above which checks are skipped
 
 hook.Add("PlayerInitialSpawn", "Guardian.AntiCheat.CppAimbot.Init", function(ply)
     ply.guardian_join_time      = CurTime()
@@ -95,12 +90,12 @@ hook.Add("PlayerAuthed", "Guardian.AntiCheat.CppAimbot.Auth", function(ply)
 end)
 
 hook.Add("StartCommand", "Guardian.AntiCheat.CppAimbot", function(ply, cmd)
-    if not Guardian.Config.cpp_aimbot              then return end
-    if ply:IsBot()                                 then return end
-    if not ply:Alive()                             then return end
-    if ply:InVehicle()                             then return end
-    if ply:IsTimingOut()                           then return end
-    if ply:PacketLoss() > CPP_PACKET_LOSS_MAX      then return end
+    if not Guardian.Config.cpp_aimbot         then return end
+    if ply:IsBot()                            then return end
+    if not ply:Alive()                        then return end
+    if ply:InVehicle()                        then return end
+    if ply:IsTimingOut()                      then return end
+    if ply:PacketLoss() > CPP_PACKET_LOSS_MAX then return end
 
     local wep = ply:GetActiveWeapon()
     if IsValid(wep) and CPP_AIMBOT_BLACKLIST[wep:GetClass()] then
@@ -151,15 +146,13 @@ hook.Add("StartCommand", "Guardian.AntiCheat.CppAimbot", function(ply, cmd)
     ply.guardian_cpp_prev_view = view
 end)
 
-end -- SERVER [1a]
-
 -- =============================================================================
 -- [1b] Aimbot — Input Contradiction Analysis
 -- =============================================================================
 -- Compares raw mouse input against actual angle change each tick.
 -- Legitimate play always has a coherent relationship between mouse movement
--- and view angle change. Silent aimbots externally write angles without touching
--- the mouse, producing a persistent contradiction that accumulates quickly.
+-- and view angle change.  Silent aimbots externally write angles without
+-- touching the mouse, producing a persistent contradiction that accumulates.
 --
 -- Three sub-detections (each individually togglable via Guardian.AimbotCFG):
 --
@@ -459,6 +452,7 @@ end)
 
 -- =============================================================================
 -- [2] Bullet Accuracy
+-- =============================================================================
 -- Counts trigger-pull events, not pellets — shotguns counted correctly.
 -- Only player-on-player hits measured. Staggered reset prevents re-flag loops.
 -- =============================================================================
@@ -517,6 +511,7 @@ end)
 
 -- =============================================================================
 -- [4] Suspicious Convars
+-- =============================================================================
 -- Checked 10 s after spawn to allow client convar reporting to settle.
 -- =============================================================================
 
@@ -575,9 +570,9 @@ local function format_time(t)
 end
 
 local function is_dos_time_too_long(time)
-    if time < DOS_CFG.min_time                      then return false end
-    if time > DOS_CFG.check_interval * 0.9          then return true  end
-    if dos_global_percentile == 0                   then return false end
+    if time < DOS_CFG.min_time             then return false end
+    if time > DOS_CFG.check_interval * 0.9 then return true  end
+    if dos_global_percentile == 0          then return false end
     return (time / dos_global_percentile) > DOS_CFG.sensitivity
 end
 
@@ -891,8 +886,8 @@ local function should_clamp_bhop(ply, cmd)
 end
 
 local function prevent_bhop(ply)
-    local vel      = ply:GetVelocity()
-    local speed    = vel:Length()
+    local vel       = ply:GetVelocity()
+    local speed     = vel:Length()
     local max_speed = ply:GetMaxSpeed()
 
     if speed > max_speed then
@@ -911,52 +906,8 @@ hook.Add("Move", "Guardian.AntiCheat.Bhop", function(ply, mv)
 end)
 
 -- =============================================================================
--- [9] Engine Prediction  (client-side detection, server-verified flag)
+-- [9] Engine Prediction  (server half — receives client flag)
 -- =============================================================================
--- SetupMove fires with the command number the engine is about to simulate.
--- CreateMove fires when the client produces a command.  If SetupMove's cmdnum
--- is higher than the last CreateMove cmdnum, the engine is running a prediction
--- frame the client never submitted — a sign of engine prediction manipulation.
--- After 10 consecutive failures the client sends a flag net message to the
--- server, which calls Guardian.FlagPlayer authoritatively.
--- =============================================================================
-
-if CLIENT then
-
-local engine_pred_cmd_number = 0
-local engine_pred_failures   = 0
-local engine_pred_sent       = false
-
-hook.Add("CreateMove", "Guardian.AntiCheat.EnginePred.CreateMove", function(cmd)
-    if not Guardian.Config.anti_engine_pred then return end
-    local cmdnum = cmd:CommandNumber()
-    if cmdnum == 0 then return end
-    engine_pred_cmd_number = cmdnum
-end)
-
-hook.Add("SetupMove", "Guardian.AntiCheat.EnginePred.SetupMove", function(ply, mv, cmd)
-    if not Guardian.Config.anti_engine_pred then return end
-    if ply ~= LocalPlayer()                 then return end
-
-    local cmdnum = cmd:CommandNumber()
-    if cmdnum == 0 then return end
-
-    if engine_pred_cmd_number ~= 0 and engine_pred_cmd_number < cmdnum then
-        if engine_pred_failures >= 10 and not engine_pred_sent then
-            net.Start("Guardian.Net.EngPredFlag")
-            net.SendToServer()
-            engine_pred_sent = true
-        else
-            engine_pred_failures = engine_pred_failures + 1
-        end
-    elseif engine_pred_cmd_number > cmdnum and engine_pred_failures > 0 then
-        engine_pred_failures = engine_pred_failures - 1
-    end
-end)
-
-end -- CLIENT [9]
-
-if SERVER then
 
 net.Receive("Guardian.Net.EngPredFlag", function(len, ply)
     if not Guardian.Config.anti_engine_pred then return end
@@ -964,17 +915,12 @@ net.Receive("Guardian.Net.EngPredFlag", function(len, ply)
     Guardian.FlagPlayer(ply, "Engine prediction manipulation detected")
 end)
 
-end -- SERVER [9]
-
 -- =============================================================================
--- [10] Suspicious Keybind Detection  (server-side)
+-- [10] Suspicious Keybind Detection
 -- =============================================================================
 -- HOME, INSERT, and END are common cheat-menu hotkeys with no legitimate
--- in-game function.  A 10 s per-player cooldown prevents alert spam when a
--- player repeats the press.
+-- in-game function.  A 10 s per-player cooldown prevents alert spam.
 -- =============================================================================
-
-if SERVER then
 
 local SUSPICIOUS_KEYS =
 {
@@ -986,9 +932,9 @@ local SUSPICIOUS_KEYS =
 local KEYBIND_CHECK_COOLDOWN = 10   -- seconds between flags per player
 
 hook.Add("PlayerButtonDown", "Guardian.AntiCheat.Keybind", function(ply, button)
-    if not Guardian.Config.keybind_checks       then return end
+    if not Guardian.Config.keybind_checks then return end
     local key_name = SUSPICIOUS_KEYS[button]
-    if not key_name                             then return end
+    if not key_name                       then return end
 
     local now       = CurTime()
     local last_time = ply.guardian_keybind_last_check
@@ -996,33 +942,25 @@ hook.Add("PlayerButtonDown", "Guardian.AntiCheat.Keybind", function(ply, button)
     if last_time and now < last_time + KEYBIND_CHECK_COOLDOWN then return end
 
     ply.guardian_keybind_last_check = now
-    Guardian.FlagPlayer(ply,
-        "Suspicious keybind pressed: " .. key_name)
+    Guardian.FlagPlayer(ply, "Suspicious keybind pressed: " .. key_name)
 end)
 
-end -- SERVER [10]
-
 -- =============================================================================
--- [11] Source Crasher — ExecuteStringCommand Exploit  (server-side, Linux)
--- =============================================================================
--- Abuses of the ExecuteStringCommand network channel can crash the server.
--- Limits: 10 000 cumulative bytes and 100 individual commands per tick.
--- Both counters reset every Tick so the window is exactly one simulation step.
--- Requires the 'slog' and 'sourcenet' modules; silently disabled on Windows.
+-- [11] Source Crasher — ExecuteStringCommand Exploit  (Linux only)
 -- =============================================================================
 --[[
-if SERVER and system.IsLinux() and Guardian.Config.source_crasher then
+if system.IsLinux() and Guardian.Config.source_crasher then
 
     local ok_slog, ok_snet = pcall(require, "slog"), false
     if ok_slog then ok_snet = pcall(require, "sourcenet") end
 
     if ok_slog and ok_snet then
 
-        local SC_MAX_LENGTH  = 10000   -- cumulative byte budget per tick
-        local SC_MAX_COUNT   = 100     -- command count budget per tick
+        local SC_MAX_LENGTH = 10000   -- cumulative byte budget per tick
+        local SC_MAX_COUNT  = 100     -- command count budget per tick
 
-        local sc_length_map  = {}
-        local sc_count_map   = {}
+        local sc_length_map = {}
+        local sc_count_map  = {}
 
         local function punish_source_crasher(steamID)
             local ply = player.GetBySteamID(steamID)
@@ -1060,22 +998,12 @@ if SERVER and system.IsLinux() and Guardian.Config.source_crasher then
             .. "(slog/sourcenet not installed).")
     end
 
-end -- SERVER + Linux [11]
+end
 ]]
 
 -- =============================================================================
--- [12] Anti-Screengrab Evasion Detection  (server triggers, client verifies)
+-- [12] Anti-Screengrab Evasion Detection  (server half)
 -- =============================================================================
--- The server sends a covert render-capture challenge to the client.
--- The client uses render.Capture to force a frame render; if HUDPaint does not
--- fire during that capture it means a screengrab hook intercepted the call,
--- which is a tell-tale sign of screengrab-blocker software.
--- The client sends the result back; the server flags on a positive report.
---
--- Challenge fires 15–30 s after PlayerSpawn (random to resist timing attacks).
--- =============================================================================
-
-if SERVER then
 
 net.Receive("Guardian.Net.AntiScreenGrab.Report", function(len, ply)
     if not Guardian.Config.anti_screengrab then return end
@@ -1096,135 +1024,15 @@ hook.Add("PlayerSpawn", "Guardian.AntiCheat.AntiScreenGrab.Spawn", function(ply)
     end)
 end)
 
-end -- SERVER [12]
-
-if CLIENT then
-
-local asg_hook_hudpaint  = nil
-local asg_hook_postrender = nil
-
-net.Receive("Guardian.Net.AntiScreenGrab.Check", function()
-    if not Guardian.Config.anti_screengrab then return end
-
-    local render_count       = 0
-    local render_count_saved = 0
-
-    -- Unique hook names prevent collisions with repeated challenges
-    local tag = "Guardian.ASG." .. math.random(100000, 999999)
-    local hp_tag = tag .. ".HUDPaint"
-    local pr_tag = tag .. ".PostRender"
-
-    hook.Add("HUDPaint", hp_tag, function()
-        render_count = render_count + 1
-    end)
-
-    -- Small random delay before the capture so timing is non-deterministic
-    timer.Simple(math.random(5, 10), function()
-        hook.Add("PostRender", pr_tag, function()
-            hook.Remove("PostRender", pr_tag)
-
-            render_count_saved = render_count
-
-            render.Capture(
-            {
-                format  = "jpeg",
-                w       = ScrW(),
-                h       = ScrH(),
-                quality = 1,
-                x       = 0,
-                y       = 0,
-            })
-
-            -- If HUDPaint did not fire during render.Capture, a hook blocked it
-            if render_count == render_count_saved then
-                net.Start("Guardian.Net.AntiScreenGrab.Report")
-                net.SendToServer()
-            end
-
-            hook.Remove("HUDPaint", hp_tag)
-        end)
-    end)
-end)
-
-end -- CLIENT [12]
-
 -- =============================================================================
--- [13] No-Recoil / Viewpunch Suppression  (client-side, server-verified flag)
+-- [13] No-Recoil / Viewpunch Suppression  (server half — receives client flag)
 -- =============================================================================
--- A legitimate client's CalcView will always produce angles that equal
--- EyeAngles + ViewPunchAngles when a punch is active.  If the displayed
--- angles diverge from that sum more than 20 times the client is likely
--- zeroing the viewpunch, either by overriding CalcView or by patching the
--- prediction directly.  After the threshold a flag net message is sent once.
--- =============================================================================
-
-if CLIENT then
-
-local NO_RECOIL_THRESHOLD = 20   -- qualifying frames before flag is sent
-
-local no_recoil_failures = 0
-local no_recoil_sent     = false
-
-local orig_calc_view = GAMEMODE.CalcView
-
-local function round_scalar(n, dp)
-    local m = 10 ^ (dp or 0)
-    return math.floor(n * m + 0.5) / m
-end
-
-local function round_angle(ang)
-    return Angle(round_scalar(ang.p), round_scalar(ang.y), round_scalar(ang.r))
-end
-
-local function angles_equal(a, b)
-    return a.p == b.p and a.y == b.y and a.r == b.r
-end
-
-function GAMEMODE:CalcView(ply, origin, angles, fov, znear, zfar, ...)
-    if not Guardian.Config.anti_recoil then
-        return orig_calc_view(self, ply, origin, angles, fov, znear, zfar, ...)
-    end
-
-    if LocalPlayer() ~= ply or GetViewEntity() ~= LocalPlayer() then
-        return orig_calc_view(self, ply, origin, angles, fov, znear, zfar, ...)
-    end
-
-    local vpunch = ply:GetViewPunchAngles()
-    local vp_r   = round_scalar(vpunch.p)
-    local vp_y   = round_scalar(vpunch.y)
-    local vp_z   = round_scalar(vpunch.r)
-
-    -- Only check when a meaningful punch is active
-    if vp_r ~= 0 or vp_y ~= 0 or vp_z ~= 0 then
-        local eye_a    = round_angle(ply:EyeAngles())
-        local disp_a   = round_angle(angles - vpunch)
-
-        if not angles_equal(eye_a, disp_a) then
-            no_recoil_failures = no_recoil_failures + 1
-            if no_recoil_failures >= NO_RECOIL_THRESHOLD and not no_recoil_sent then
-                net.Start("Guardian.Net.NoRecoilFlag")
-                net.SendToServer()
-                no_recoil_sent = true
-            end
-        elseif no_recoil_failures > 0 then
-            no_recoil_failures = no_recoil_failures - 1
-        end
-    end
-
-    return orig_calc_view(self, ply, origin, angles, fov, znear, zfar, ...)
-end
-
-end -- CLIENT [13]
-
-if SERVER then
 
 net.Receive("Guardian.Net.NoRecoilFlag", function(len, ply)
     if not Guardian.Config.anti_recoil  then return end
     if not IsValid(ply) or ply:IsBot()  then return end
     Guardian.FlagPlayer(ply, "No-recoil / viewpunch suppression detected")
 end)
-
-end -- SERVER [13]
 
 -- =============================================================================
 -- [14] Anti-Spread — Server-Authoritative Bullet Spread Restoration
@@ -1239,10 +1047,8 @@ end -- SERVER [13]
 -- own spread logic that must match CS:S / HL2 mechanics exactly.
 -- =============================================================================
 
-if SERVER then
-
 timer.Simple(5, function()
-    local entity_meta = FindMetaTable("Entity")
+    local entity_meta       = FindMetaTable("Entity")
     local orig_fire_bullets = entity_meta.FireBullets
 
     function entity_meta:FireBullets(bullet_info, suppress_host_events)
@@ -1273,22 +1079,9 @@ timer.Simple(5, function()
     end
 end)
 
-end -- SERVER [14]
-
 -- =============================================================================
--- [15] Alt Account / Ban Evasion Detection
+-- [15] Alt Account / Ban Evasion Detection  (server half)
 -- =============================================================================
--- After PlayerSpawn the server sends a challenge to the client.
--- The client reads the persistent gac_alts PData key, appends its current
--- SteamID64 if absent, then reports every stored ID back to the server.
--- The server checks each reported ID against the active ban list and flags if
--- any banned ID is found.  Optionally the server also logs when a player
--- appears to be using multiple accounts (alt_notify).
---
--- PData is per-player persistent storage; the list accumulates across sessions.
--- =============================================================================
-
-if SERVER then
 
 local ALT_CHECK_GRACE_SEC = 15   -- seconds post-spawn before challenge fires
 
@@ -1309,8 +1102,8 @@ net.Receive("Guardian.Net.AltCheckResponse", function(len, ply)
     local steam64 = net.ReadString()
     if steam64 == ""                     then return end
 
-    -- Check custom ban storage (adapt to your ban backend)
-    local steam32 = util.SteamIDFrom64(steam64)
+    -- Check custom ban storage (adapt to your ban backend).
+    local steam32   = util.SteamIDFrom64(steam64)
     local is_banned = false
 
     if GetUPDataGACSID64 then
@@ -1336,61 +1129,12 @@ net.Receive("Guardian.Net.AltCheckCount", function(len, ply)
     end
 end)
 
-end -- SERVER [15]
-
-if CLIENT then
-
-net.Receive("Guardian.Net.AltCheck", function()
-    local local_ply = LocalPlayer()
-    local steam64   = local_ply:SteamID64()
-
-    -- Load existing alt list from persistent storage
-    local raw_ids   = local_ply:GetPData("guardian_alts", "")
-    local id_array  = string.Explode("|", raw_ids, false)
-
-    -- Ensure the current ID is in the list
-    local found = false
-    for _, id in ipairs(id_array) do
-        if id == steam64 then found = true; break end
-    end
-
-    if not found then
-        table.insert(id_array, steam64)
-        local new_raw = table.concat(id_array, "|")
-        local_ply:SetPData("guardian_alts", new_raw)
-    end
-
-    -- Report every known ID to the server for ban-list cross-check
-    for _, id in ipairs(id_array) do
-        if id ~= "" then
-            net.Start("Guardian.Net.AltCheckResponse")
-            net.WriteString(id)
-            net.SendToServer()
-        end
-    end
-
-    -- Report total account count
-    local count = 0
-    for _, id in ipairs(id_array) do
-        if id ~= "" then count = count + 1 end
-    end
-
-    net.Start("Guardian.Net.AltCheckCount")
-    net.WriteUInt(math.min(count, 255), 8)
-    net.SendToServer()
-end)
-
-end -- CLIENT [15]
-
 -- =============================================================================
 -- Shared Cleanup
 -- =============================================================================
 
 hook.Add("PlayerDisconnected", "Guardian.AntiCheat.SharedCleanup", function(ply)
-    ac_shot_stats[ply]  = nil
-    bhop_tracker[ply]   = nil
-
-    if SERVER then
-        dos_process_collector[ply:SteamID()] = nil
-    end
+    ac_shot_stats[ply] = nil
+    bhop_tracker[ply]  = nil
+    dos_process_collector[ply:SteamID()] = nil
 end)

@@ -302,7 +302,7 @@ function SCOREBOARD:Paint(w, h)
     Box(8, 0, 0, w, 46, C.surface)
     Rect(0, 36, w, 10, C.surface)
     Rect(0, 46, w, 1, C.border)
-    Txt("SCOREBOARD", "G.Title", 14, 12, C.fg)
+    Txt("GUARDIAN", "G.Title", 14, 12, C.fg)
     local n = #player.GetAll()
     Txt(n .. (n == 1 and " player" or " players"), "G.Sm", 14, 31, C.sub)
 end
