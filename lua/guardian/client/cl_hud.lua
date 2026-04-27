@@ -141,7 +141,7 @@ end
 local PLAYERPANEL = {}
 
 function PLAYERPANEL:Init()
-    self:SetTall(52)
+    self:SetTall(60)
 end
 
 function PLAYERPANEL:SetPlayer(ply)
@@ -176,8 +176,38 @@ function PLAYERPANEL:Paint(w, h)
 
     if not IsValid(ply) then return end
 
-    -- Name (vertically centred)
-    Txt(ply:Nick(), "G.Bold", 52, math.floor((h - 15) * 0.5), C.fg)
+-- =========================
+    -- NAME (safe)
+    -- =========================
+    local name = ply:Nick() or "Unknown"
+
+    local x = 52
+    local y = math.floor((h - 15) * 0.5)
+
+    surface.SetFont("G.Bold")
+    local name_w = surface.GetTextSize(name)
+
+    Txt(name, "G.Bold", x, y, C.fg)
+
+
+     -- =========================
+    -- RANK (safe + to the right)
+    -- =========================
+    local rank_label = ply:GetNWString("G_RankLabel", "")
+    local rank_cr    = ply:GetNWString("G_RankCR", "")
+
+    local rr, rg, rb = rank_cr:match("(%d+),(%d+),(%d+)")
+    local rank_col   = (rr and rg and rb)
+        and Color(tonumber(rr), tonumber(rg), tonumber(rb))
+        or C.sub
+
+    -- safety fallback
+    rank_label = rank_label or ""
+
+    local spacing = 12
+    local rank_x = x + name_w + spacing
+
+    Txt(rank_label, "G.Sm", rank_x, y, rank_col)
 
     -- ── Kills (centred in slot) ──
     local kx = col_x(w, "kills") - math.floor(COL.kills_w * 0.5)

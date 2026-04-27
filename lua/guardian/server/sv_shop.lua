@@ -365,7 +365,16 @@ hook.Add("PlayerInitialSpawn", "Guardian.Shop.JoinMsg", function(ply)
         local msg_item = equipped["joinmsg"] and Guardian.FindItem(equipped["joinmsg"])
         if not msg_item then return end
         local text = msg_item.data.msg:gsub("{name}", ply:Nick())
-        PrintMessage(HUD_PRINTTALK, "[*] " .. text)
+
+        net.Start("Guardian.ChatMsg")
+            net.WriteEntity(ply)
+            net.WriteTable({
+                { r = 255, g = 195, b = 50 },
+                "[*] ",
+                { r = 220, g = 220, b = 232 },
+                text,
+            })
+        net.Broadcast()
     end)
 end)
 
